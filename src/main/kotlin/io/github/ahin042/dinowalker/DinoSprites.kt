@@ -1,6 +1,7 @@
 package io.github.ahin042.dinowalker
 
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.util.ScalableIcon
 import com.intellij.ui.scale.JBUIScale
 import java.awt.Component
 import java.awt.Graphics
@@ -9,6 +10,7 @@ import java.awt.RenderingHints
 import java.awt.image.BufferedImage
 import javax.imageio.ImageIO
 import javax.swing.Icon
+import kotlin.math.roundToInt
 
 /**
  * Loads the bundled pixel-art PNGs exactly as shipped (no recoloring, no resampling at load time).
@@ -37,11 +39,10 @@ internal object DinoSprites {
 
     private val cache = HashMap<String, BufferedImage?>()
 
-    /** Must be called on the EDT (the cache is not synchronized). */
     fun get(sprite: Sprite, component: Component?): BufferedImage? {
         val suffix = if (JBUIScale.sysScale(component) >= HIDPI_THRESHOLD) "@2x" else "@1x"
         val path = "/assets/${sprite.baseName}$suffix.png"
-        return cache.getOrPut(path) { load(path) }
+        return synchronized(cache) { cache.getOrPut(path) { load(path) } }
     }
 
     private fun load(path: String): BufferedImage? {
@@ -74,14 +75,21 @@ internal object DinoSprites {
      * Tool window icon: an unscaled 16×16 crop of the dino's head from `dino_run1`.
      * Pixels are copied 1:1 (2:1 from the `@2x` image on HiDPI screens), never resampled smoothly.
      */
-    object HeadIcon : Icon {
-        private const val SIZE = 16
-        private const val CROP_X = 24
-        private const val CROP_Y = 1
+    class HeadIcon(size: Int = BASE_SIZE) : ScalableIcon {
+        private val size = size.coerceIn(1, DINO_WIDTH)
 
-        override fun getIconWidth() = SIZE
+        // Larger icons show a larger window around the head instead of enlarging pixels.
+        private val cropX = minOf(HEAD_CROP_X, DINO_WIDTH - this.size)
+        private val cropY = minOf(HEAD_CROP_Y, DINO_HEIGHT - this.size)
 
-        override fun getIconHeight() = SIZE
+        override fun getIconWidth() = size
+
+        override fun getIconHeight() = size
+
+        override fun getScale(): Float = size.toFloat() / BASE_SIZE
+
+        /** New UI tool window stripes ask for their own size (e.g. 20 px); see SquareStripeButton. */
+        override fun scale(scaleFactor: Float): Icon = HeadIcon((size * scaleFactor).roundToInt())
 
         override fun paintIcon(c: Component?, g: Graphics, x: Int, y: Int) {
             val image = get(Sprite.RUN_RIGHT_1, c) ?: return
@@ -91,14 +99,23 @@ internal object DinoSprites {
                 applyPixelHints(g2)
                 g2.drawImage(
                     image,
-                    x, y, x + SIZE, y + SIZE,
-                    CROP_X * factor, CROP_Y * factor, (CROP_X + SIZE) * factor, (CROP_Y + SIZE) * factor,
+                    x, y, x + size, y + size,
+                    cropX * factor, cropY * factor, (cropX + size) * factor, (cropY + size) * factor,
                     null,
                 )
+            }
+            catch (e: Exception) {
+                LOG.warn("Dino Walker: icon paint failed", e)
             }
             finally {
                 g2.dispose()
             }
+        }
+
+        private companion object {
+            const val BASE_SIZE = 16
+            const val HEAD_CROP_X = 24
+            const val HEAD_CROP_Y = 1
         }
     }
 }

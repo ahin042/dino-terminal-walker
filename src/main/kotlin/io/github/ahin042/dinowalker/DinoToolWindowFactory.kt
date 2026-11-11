@@ -9,7 +9,7 @@ import com.intellij.ui.content.ContentFactory
 class DinoToolWindowFactory : ToolWindowFactory, DumbAware {
 
     override fun init(toolWindow: ToolWindow) {
-        toolWindow.setIcon(DinoSprites.HeadIcon)
+        toolWindow.setIcon(DinoSprites.HeadIcon())
     }
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
