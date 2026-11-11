@@ -1,0 +1,7 @@
+<!-- Loaded only when the Terminal plugin is present (optional dependency in plugin.xml). -->
+<idea-plugin>
+  <extensions defaultExtensionNs="org.jetbrains.plugins.terminal">
+    <localTerminalCustomizer implementation="io.github.ahin042.dinowalker.terminal.DinoTerminalCustomizer"
+                             order="last"/>
+  </extensions>
+</idea-plugin>

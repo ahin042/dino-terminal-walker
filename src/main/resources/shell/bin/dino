@@ -1,0 +1,13 @@
+#!/bin/sh
+# Dino Walker: `dino start` / `dino exit` (works in any POSIX shell inside the IDE terminal).
+case "${1-}" in
+  start) cmd=start ;;
+  exit|stop) cmd=exit ;;
+  *) printf 'usage: dino start | dino exit\n' >&2; exit 2 ;;
+esac
+if [ -z "${DINO_WALKER_STATE_DIR-}" ] || [ ! -d "$DINO_WALKER_STATE_DIR" ]; then
+  printf 'dino: not connected to the IDE (open a new terminal tab, or use Find Action: Dino: Start)\n' >&2
+  exit 1
+fi
+tmp="$DINO_WALKER_STATE_DIR/command.$$.tmp"
+printf '%s\n' "$cmd" > "$tmp" && mv -f "$tmp" "$DINO_WALKER_STATE_DIR/command"
