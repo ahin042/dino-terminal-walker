@@ -1,5 +1,6 @@
 package io.github.ahin042.dinowalker
 
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
@@ -8,7 +9,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowManager
-import com.intellij.openapi.wm.ToolWindowType
+import com.intellij.openapi.wm.WindowManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -17,16 +18,17 @@ import kotlinx.coroutines.launch
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
+import javax.swing.JComponent
 
 /**
- * Per-project controller: owns the command-file poller and drives the [DinoPanel] of this project's
- * tool window. Each project gets its own state directory, so terminals of different projects never
- * talk to the wrong dino.
+ * Per-project controller: owns the command-file poller and the [DinoOverlay] that walks on this project's
+ * Terminal tool window. Each project gets its own state directory, so terminals of different projects
+ * never talk to the wrong dino.
  */
 @Service(Service.Level.PROJECT)
-class DinoProjectService(private val project: Project, private val scope: CoroutineScope) {
+class DinoProjectService(private val project: Project, private val scope: CoroutineScope) : Disposable {
 
-    private var panel: DinoPanel? = null
+    private var overlay: DinoOverlay? = null
 
     @Volatile
     private var pollJob: Job? = null
@@ -34,18 +36,21 @@ class DinoProjectService(private val project: Project, private val scope: Corout
     /** Directory exported to the shell as `DINO_WALKER_STATE_DIR`; null if it could not be created. */
     val stateDir: Path? by lazy { DinoShellFiles.projectStateDir(project.locationHash) }
 
-    /** Shows the tool window and starts (or restarts) the walk. Safe to call from any thread. */
+    /** Starts (or restarts) the walk on top of the Terminal tool window. Safe to call from any thread. */
     fun start() = onEdt {
-        val toolWindow = toolWindow() ?: return@onEdt
-        keepTerminalVisible(toolWindow)
-        toolWindow.show { panel?.start() }
+        val terminal = terminalToolWindow()
+        if (terminal != null && !terminal.isVisible) {
+            // e.g. `Dino: Start` from Find Action while the terminal is closed: the dino needs its ground.
+            terminal.show { overlay().start() }
+        }
+        else {
+            overlay().start()
+        }
     }
 
-    /** Drops the meteor; the tool window closes itself when the animation ends. Safe from any thread. */
+    /** Drops the meteor; the dino disappears when the animation ends. Safe to call from any thread. */
     fun exit() = onEdt {
-        val current = panel
-        if (current == null || current.state != DinoPanel.State.WALKING) return@onEdt
-        current.die()
+        overlay?.die()
     }
 
     /**
@@ -79,36 +84,29 @@ class DinoProjectService(private val project: Project, private val scope: Corout
         }
     }
 
-    internal fun attachPanel(newPanel: DinoPanel) {
-        panel = newPanel
-        Disposer.register(newPanel) { if (panel === newPanel) panel = null }
-    }
+    override fun dispose() = Unit
 
-    internal fun onDeathFinished() {
-        toolWindow()?.hide(null)
-    }
-
-    private fun toolWindow(): ToolWindow? {
-        if (project.isDisposed) return null
-        return ToolWindowManager.getInstance(project).getToolWindow(DinoToolWindowFactory.ID)
-    }
+    private fun overlay(): DinoOverlay =
+        overlay ?: DinoOverlay(::groundComponent).also {
+            overlay = it
+            Disposer.register(this, it)
+        }
 
     /**
-     * Two docked tool windows sharing an anchor and side hide each other. If Dino would replace the
-     * visible Terminal, move Dino to the other half of that anchor (side by side for bottom, stacked
-     * for left/right) so that both stay visible.
+     * What the dino stands on: the Terminal tool window while it is shown, otherwise (an IDE without the
+     * Terminal plugin) the status bar. Returns null while the terminal is hidden; the overlay then keeps
+     * watching the component it already has and resumes when that one is shown again.
      */
-    private fun keepTerminalVisible(dino: ToolWindow) {
-        if (dino.isVisible) return
-        val terminal = ToolWindowManager.getInstance(project).getToolWindow(TERMINAL_TOOL_WINDOW_ID) ?: return
-        if (terminal.isVisible &&
-            terminal.type == ToolWindowType.DOCKED &&
-            dino.type == ToolWindowType.DOCKED &&
-            terminal.anchor == dino.anchor &&
-            terminal.isSplitMode == dino.isSplitMode
-        ) {
-            dino.setSplitMode(!terminal.isSplitMode, null)
-        }
+    private fun groundComponent(): JComponent? {
+        if (project.isDisposed) return null
+        val terminal = terminalToolWindow()
+        if (terminal != null) return if (terminal.isVisible) terminal.component else null
+        return WindowManager.getInstance().getIdeFrame(project)?.statusBar?.component
+    }
+
+    private fun terminalToolWindow(): ToolWindow? {
+        if (project.isDisposed) return null
+        return ToolWindowManager.getInstance(project).getToolWindow(TERMINAL_TOOL_WINDOW_ID)
     }
 
     private fun onEdt(action: () -> Unit) {

@@ -4,7 +4,7 @@
   <vendor url="https://github.com/ahin042">ahin042</vendor>
 
   <description><![CDATA[
-    <p>A tiny pixel dino walks back and forth in a thin panel next to your terminal.</p>
+    <p>A tiny pixel dino walks back and forth along the top edge of your terminal.</p>
     <ul>
       <li>Type <code>start dino</code> in the IDE terminal to bring it out.</li>
       <li>Type <code>exit dino</code> and a meteor takes care of it.</li>
@@ -19,22 +19,14 @@
   <depends>com.intellij.modules.platform</depends>
   <depends optional="true" config-file="plugin-terminal.xml">org.jetbrains.plugins.terminal</depends>
 
-  <extensions defaultExtensionNs="com.intellij">
-    <toolWindow id="Dino"
-                anchor="bottom"
-                factoryClass="io.github.ahin042.dinowalker.DinoToolWindowFactory"
-                doNotActivateOnStart="true"
-                canCloseContents="false"/>
-  </extensions>
-
   <actions>
     <action id="DinoWalker.Start"
             class="io.github.ahin042.dinowalker.DinoStartAction"
             text="Dino: Start"
-            description="Open the Dino panel and let the dino walk"/>
+            description="Let the dino walk on top of the terminal"/>
     <action id="DinoWalker.Stop"
             class="io.github.ahin042.dinowalker.DinoStopAction"
             text="Dino: Stop"
-            description="Drop a meteor on the dino and close the Dino panel"/>
+            description="Drop a meteor on the dino"/>
   </actions>
 </idea-plugin>
