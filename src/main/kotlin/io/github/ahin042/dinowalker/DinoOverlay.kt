@@ -8,11 +8,14 @@ import io.github.ahin042.dinowalker.DinoSprites.DINO_WIDTH
 import io.github.ahin042.dinowalker.DinoSprites.METEOR_SIZE
 import io.github.ahin042.dinowalker.DinoSprites.Sprite
 import java.awt.Component
+import java.awt.Cursor
 import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.Rectangle
 import java.awt.event.HierarchyEvent
 import java.awt.event.HierarchyListener
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
 import javax.swing.JComponent
 import javax.swing.JLayeredPane
 import javax.swing.JRootPane
@@ -60,6 +63,12 @@ internal class DinoOverlay(private val groundProvider: () -> JComponent?) : JCom
     private var legFrame = 0
     private var dinoVisible = true
 
+    // Jumping (heights in px above the ground, velocities in px per 60 fps frame, both positive = up)
+    private var jumping = false
+    private var jumpHeight = 0.0
+    private var jumpVelocity = 0.0
+    private var reachedMinJumpHeight = false
+
     // Dying
     private var deathPhase = DeathPhase.FALLING
     private var phaseElapsed = 0.0
@@ -84,10 +93,32 @@ internal class DinoOverlay(private val groundProvider: () -> JComponent?) : JCom
     init {
         isOpaque = false
         isVisible = false
+        cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+        addMouseListener(object : MouseAdapter() {
+            override fun mousePressed(e: MouseEvent) {
+                if (SwingUtilities.isLeftMouseButton(e)) {
+                    e.consume()
+                    jump()
+                }
+            }
+        })
     }
 
-    /** Never the target of mouse events: clicks and hovers go to whatever is underneath. */
-    override fun contains(x: Int, y: Int): Boolean = false
+    /**
+     * Only the dino itself takes mouse input (click it to jump); everywhere else clicks and hovers go to
+     * whatever is underneath.
+     */
+    override fun contains(x: Int, y: Int): Boolean =
+        state == State.WALKING && dinoVisible && dinoBounds().contains(x, y)
+
+    /** Jumps like the original T-Rex. Ignored while already in the air or not walking. */
+    fun jump() {
+        if (disposed || state != State.WALKING || jumping) return
+        jumping = true
+        jumpHeight = 0.0
+        jumpVelocity = INITIAL_JUMP_VELOCITY
+        reachedMinJumpHeight = false
+    }
 
     /** Starts walking from the left edge. Also revives the dino if the meteor animation is running. */
     fun start() {
@@ -213,6 +244,8 @@ internal class DinoOverlay(private val groundProvider: () -> JComponent?) : JCom
         legFrameElapsed = 0.0
         dinoVisible = true
         meteorVisible = false
+        jumping = false
+        jumpHeight = 0.0
         repaint()
     }
 
@@ -230,9 +263,10 @@ internal class DinoOverlay(private val groundProvider: () -> JComponent?) : JCom
         meteorFrameElapsed = 0.0
 
         // The meteor's body sits in the lower part of the 24×24 image; aim that body at the dino's back.
+        // Aimed at the dino standing on the ground: a dino in mid-jump lands before the meteor arrives.
         val bodyOffsetX = if (meteorTowardsRight) METEOR_BODY_RIGHT_X else METEOR_BODY_LEFT_X
         meteorEndX = dinoCenterX - bodyOffsetX
-        meteorEndY = dinoY() + DINO_HIT_Y - METEOR_BODY_Y
+        meteorEndY = groundDinoY() + DINO_HIT_Y - METEOR_BODY_Y
         meteorStartY = -METEOR_SIZE.toDouble() - 2.0
         // The tail art is drawn at 45°, so travel at 45° as well.
         val drop = meteorEndY - meteorStartY
@@ -269,13 +303,17 @@ internal class DinoOverlay(private val groundProvider: () -> JComponent?) : JCom
             val dt = ((now - lastTickNanos) / 1_000_000.0).coerceAtLeast(0.0)
             lastTickNanos = now
 
-            legFrameElapsed += dt
-            if (legFrameElapsed >= RUN_FRAME_MS) {
-                val flips = (legFrameElapsed / RUN_FRAME_MS).toLong()
-                legFrameElapsed -= flips * RUN_FRAME_MS
-                if (flips % 2 == 1L) legFrame = 1 - legFrame
+            // Legs keep still in the air (there is no separate jumping frame among the assets).
+            if (!jumping) {
+                legFrameElapsed += dt
+                if (legFrameElapsed >= RUN_FRAME_MS) {
+                    val flips = (legFrameElapsed / RUN_FRAME_MS).toLong()
+                    legFrameElapsed -= flips * RUN_FRAME_MS
+                    if (flips % 2 == 1L) legFrame = 1 - legFrame
+                }
             }
 
+            if (jumping) updateJump(dt.coerceAtMost(MAX_STEP_MS))
             when (state) {
                 State.WALKING -> walk(dt.coerceAtMost(MAX_STEP_MS))
                 State.DYING -> advanceDeath(dt)
@@ -296,10 +334,28 @@ internal class DinoOverlay(private val groundProvider: () -> JComponent?) : JCom
         }
     }
 
+    /** Port of Chromium's `Trex.updateJump` / `endJump` with the y axis flipped (height above ground). */
+    private fun updateJump(dtMs: Double) {
+        val framesElapsed = dtMs / JUMP_MS_PER_FRAME
+        jumpHeight += (jumpVelocity * framesElapsed).roundToInt()
+        jumpVelocity -= GRAVITY * framesElapsed
+
+        if (jumpHeight > MIN_JUMP_HEIGHT) reachedMinJumpHeight = true
+        if (jumpHeight > MAX_JUMP_HEIGHT && reachedMinJumpHeight && jumpVelocity > DROP_VELOCITY) {
+            jumpVelocity = DROP_VELOCITY
+        }
+        if (jumpHeight <= 0.0) {
+            jumping = false
+            jumpHeight = 0.0
+        }
+    }
+
+    private fun dinoBounds() = Rectangle(dinoX.roundToInt(), dinoY(), DINO_WIDTH, DINO_HEIGHT)
+
     private fun spriteArea(): Rectangle? {
         var area: Rectangle? = null
         if (dinoVisible || state == State.DYING) {
-            area = Rectangle(dinoX.roundToInt() - 1, dinoY() - 1, DINO_WIDTH + 2, DINO_HEIGHT + 2)
+            area = dinoBounds().apply { grow(1, 1) }
         }
         if (state == State.DYING && meteorVisible) {
             val meteor = Rectangle(meteorX.roundToInt() - 1, meteorY.roundToInt() - 1, METEOR_SIZE + 2, METEOR_SIZE + 2)
@@ -341,6 +397,8 @@ internal class DinoOverlay(private val groundProvider: () -> JComponent?) : JCom
                 meteorX = meteorStartX + (meteorEndX - meteorStartX) * eased
                 meteorY = meteorStartY + (meteorEndY - meteorStartY) * eased
                 if (t >= 1.0) {
+                    jumping = false
+                    jumpHeight = 0.0
                     meteorVisible = false
                     deathPhase = DeathPhase.BLINKING
                     phaseElapsed = 0.0
@@ -365,7 +423,9 @@ internal class DinoOverlay(private val groundProvider: () -> JComponent?) : JCom
         }
     }
 
-    private fun dinoY(): Int = maxOf(0, groundY - DINO_HEIGHT)
+    private fun groundDinoY(): Int = maxOf(0, groundY - DINO_HEIGHT)
+
+    private fun dinoY(): Int = groundDinoY() - jumpHeight.roundToInt()
 
     override fun paintComponent(g: Graphics) {
         if (state == State.IDLE) return
@@ -434,5 +494,15 @@ internal class DinoOverlay(private val groundProvider: () -> JComponent?) : JCom
 
         /** Where on the dino (from its top) the meteor lands: its back. */
         private const val DINO_HIT_Y = 14.0
+
+        // Jump, from Chromium's trex.ts (normalJumpConfig, defaultTrexConfig.dropVelocity, JUMPING
+        // msPerFrame). The original measures max height from the top of its 150 px canvas, whose ground
+        // is at 150 - 47 - 10 (bottomPad) = 93; here both limits are expressed as height above ground.
+        private const val JUMP_MS_PER_FRAME = 1000.0 / 60
+        private const val INITIAL_JUMP_VELOCITY = 10.0
+        private const val GRAVITY = 0.6
+        private const val DROP_VELOCITY = 5.0
+        private const val MIN_JUMP_HEIGHT = 30.0
+        private const val MAX_JUMP_HEIGHT = 93.0 - 30.0
     }
 }
