@@ -1,0 +1,47 @@
+This product includes pixel-art sprite assets derived from the Chromium project.
+
+Files: assets/dino_run1@1x.png, assets/dino_run2@1x.png, assets/dino_run1@2x.png,
+       assets/dino_run2@2x.png, assets/dino_left_run1@1x.png, assets/dino_left_run2@1x.png,
+       assets/dino_left_run1@2x.png, assets/dino_left_run2@2x.png
+
+Source: https://chromium.googlesource.com/chromium/src/+/main/components/neterror/resources/images/
+        (100-offline-sprite.png / 200-offline-sprite.png, T-Rex region)
+
+The horizontally mirrored ("dino_left_*") variants are unmodified pixel data,
+mirrored only. No pixel colors were altered.
+
+The following copyright notice and license apply to those files:
+
+Copyright 2015 The Chromium Authors
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google LLC nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+---
+
+The meteor sprites (assets/meteor_*.png) are original work created for this
+project and are NOT derived from Chromium. They are licensed under the same
+terms as the rest of this plugin.
